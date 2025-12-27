@@ -39,7 +39,7 @@ app.post("/ingest", async (req, res) => {
   req.on("data", (chunk) => {
     size += chunk.length;
     if (size > MAX_SIZE) {
-      req.destroy();
+      return req.destroy();
     } else {
       chunks.push(chunk);
     }
@@ -53,7 +53,7 @@ app.post("/ingest", async (req, res) => {
       try {
         evt = JSON.parse(str);
       } catch (error) {
-        res.status(400).json({ error: "Invalid JSON." });
+        return res.status(400).json({ error: "Invalid JSON." });
       }
 
       const { name, occurredAt, properties } = evt;
