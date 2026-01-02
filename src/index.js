@@ -3,11 +3,39 @@ const express = require("express");
 const { v7: uuid } = require("uuid");
 const { pool } = require("./db");
 const { startMetrics } = require("../metircs");
+const { queue, takeBatch, enqueue } = require("./queue");
 
 const app = express();
 startMetrics("ingest");
 
-const MAX_INFLIGHT = 50; // hard limit
+const BATCH_SIZE = 100
+const FLUSH_MS = 50
+
+const sinkDB = async () => {
+  if (queue.length == 0) return setTimeout(sinkDB, FLUSH_MS)
+  const batch = takeBatch(BATCH_SIZE)
+
+  try {
+    await pool.query(
+      `
+        INSERT INTO events (id, name, occurred_at, properties)
+        SELECT * FROM jsonb_to_recordset($1::jsonb)
+        AS x(id uuid, name text, occurred_at timestamptz, properties jsonb)
+      `,
+      [JSON.stringify(batch)]
+    )
+  } catch (error) {
+    console.log(queue, "queue")
+    console.log('batch failed, requeueing.', error)
+    queue.unshift(...batch)
+    console.log(queue, "queue-after")
+  }
+
+  setImmediate(sinkDB)
+}
+sinkDB()
+
+const MAX_INFLIGHT = 100; // hard limit
 let inflight = 0;
 
 app.get("/health", async (req, res) => {
@@ -47,32 +75,21 @@ app.post("/ingest", async (req, res) => {
 
   req.on("end", async () => {
     try {
-      const buf = Buffer.concat(chunks);
-      const str = buf.toString("utf8");
-      let evt;
-      try {
-        evt = JSON.parse(str);
-      } catch (error) {
-        return res.status(400).json({ error: "Invalid JSON." });
-      }
-
-      const { name, occurredAt, properties } = evt;
-      if (!name || !occurredAt) {
+      const event = JSON.parse(Buffer.concat(chunks));
+      const { name, occurred_at } = event;
+      if (!name || !occurred_at) {
         return res.status(400).json({ error: "Invalid payload." });
       }
+      const ok = enqueue({id: uuid(), ...event})
 
-      const data = await pool.query(
-        `
-          INSERT INTO events (id, name, occurred_at, properties) 
-          VALUES ($1,$2,$3,$4) 
-          RETURNING *
-        `,
-        [uuid(), name, occurredAt, properties]
-      );
-      res.status(200).json({ data: data.rows });
+      if (!ok) {
+        return res.status(503).json({error: 'queue full.'})
+      }
+
+      res.status(202).json({message: 'event registered'})
     } catch (error) {
       console.log("ingest error:", error);
-      res.status(500).json({ error: "Internal error." });
+      return res.status(400).json({ error: "Invalid JSON." });
     } finally {
       cleanup();
     }
