@@ -38,6 +38,22 @@ sinkDB()
 const MAX_INFLIGHT = 100; // hard limit
 let inflight = 0;
 
+const trackInflight = (req, res, next) => {
+  if (inflight > MAX_INFLIGHT) {
+    console.log('overloaded')
+    return res.status(429).send("overloaded");
+  }
+  else {
+    inflight ++
+    next()
+  }
+}
+const deductInflight = () => {
+  if (inflight > 0) inflight--;
+};
+
+
+
 app.get("/health", async (req, res) => {
   const result = await pool.query("SELECT 1");
   res.json({ status: "ok", db: result.rows[0] });
@@ -48,21 +64,11 @@ app.get("/count_events", async (req, res)=>{
   res.json({result})
 })
 
-app.post("/ingest", async (req, res) => {
-  if (inflight > MAX_INFLIGHT) {
-    console.log('overloaded')
-    return res.status(429).send("overloaded");
-  }
-
-  inflight++;
+app.post("/ingest", trackInflight, async (req, res) => {
 
   const MAX_SIZE = 1024 * 1024 * 25; //25MB
   const chunks = [];
   let size = 0;
-
-  const cleanup = () => {
-    if (inflight > 0) inflight--;
-  };
 
   req.on("data", (chunk) => {
     size += chunk.length;
@@ -91,16 +97,16 @@ app.post("/ingest", async (req, res) => {
       console.log("ingest error:", error);
       return res.status(400).json({ error: "Invalid JSON." });
     } finally {
-      cleanup();
+      deductInflight();
     }
   });
 
   req.on('error', (error) => {
     console.log('request error: ', error)
-    cleanup()
+    deductInflight()
   })
 
-  req.on('close', cleanup)
+  req.on('close', deductInflight)
 });
 
 const PORT = process.env.PORT || 3000;
