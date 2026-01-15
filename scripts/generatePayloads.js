@@ -44,7 +44,7 @@ const randomProps = (bytes) => {
 const eventBase = () => ({
   id: randomUUID(),
   name: "click",
-  occurredAt: nowISO(),
+  occurred_at: nowISO(),
   properties: { user: randomUUID(), value: Math.random() }
 });
 
