@@ -2,8 +2,8 @@ require("dotenv").config();
 const express = require("express");
 const { v7: uuid } = require("uuid");
 const { pool } = require("./db");
-const { startMetrics } = require("../metircs");
-const { queue, takeBatch, enqueue } = require("./queue");
+const { startMetrics } = require("./services/metircs");
+const { queue, takeBatch, enqueue } = require("./services/queue");
 
 const app = express();
 startMetrics("ingest");
@@ -11,6 +11,7 @@ startMetrics("ingest");
 const BATCH_SIZE = 100
 const FLUSH_MS = 50
 
+// TODO: sinkDB should sink incoming events to events staging and worker will take care of move staging to production events
 const sinkDB = async () => {
   if (queue.length == 0) return setTimeout(sinkDB, FLUSH_MS)
   const batch = takeBatch(BATCH_SIZE)
