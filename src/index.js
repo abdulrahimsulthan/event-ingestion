@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const { v7: uuid } = require("uuid");
-const { pool } = require("./db");
+const { pool } = require("./config/db");
 const { startMetrics } = require("./services/metircs");
 const { queue, takeBatch, enqueue } = require("./services/queue");
 
