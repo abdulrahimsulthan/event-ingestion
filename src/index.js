@@ -8,7 +8,10 @@ const registerWorker = require("./config/worker");
 
 const app = express();
 startMetrics("ingest");
-registerWorker()
+if (process.env.WORKERS_ENABLED === "true") {
+  registerWorker();
+}
+
 
 app.use(trackInflight);
 
