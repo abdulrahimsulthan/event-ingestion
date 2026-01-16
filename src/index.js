@@ -4,9 +4,11 @@ const { pool } = require("./config/db");
 const { startMetrics } = require("./services/metrics");
 const { trackInflight, deductInflight } = require("./middleware/rateLimiter");
 const ingest = require("./controllers/eventController");
+const registerWorker = require("./config/worker");
 
 const app = express();
 startMetrics("ingest");
+registerWorker()
 
 app.use(trackInflight);
 
