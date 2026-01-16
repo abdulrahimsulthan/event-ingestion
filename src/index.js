@@ -2,7 +2,6 @@ require("dotenv").config();
 const express = require("express");
 const { pool } = require("./config/db");
 const { startMetrics } = require("./services/metrics");
-const { queue, takeBatch } = require("./services/queue");
 const { trackInflight } = require("./middleware/rateLimiter");
 const ingest = require("./controllers/eventController");
 
