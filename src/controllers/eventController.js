@@ -1,6 +1,5 @@
 const { deductInflight } = require("../middleware/rateLimiter");
-const { enqueue } = require("../services/queue");
-const { v7: uuid } = require("uuid");
+const stageEvents = require("../services/stageEvents");
 
 const ingest = async (req, res) => {
   const MAX_SIZE = 1024 * 1024 * 25; //25MB
@@ -18,15 +17,19 @@ const ingest = async (req, res) => {
 
   req.on("end", async () => {
     try {
+      // TODO: Assumed single event sent, Yet to handle NDJSON of Batched events
       const event = JSON.parse(Buffer.concat(chunks));
-      const { name, occurred_at } = event;
-      if (!name || !occurred_at) {
+
+      const { id, name, occurred_at } = event;
+      if (!id || !name || !occurred_at) {
         return res.status(400).json({ error: "Invalid payload." });
       }
-      const ok = enqueue({id: uuid(), ...event})
+      const ok = await stageEvents([event])
 
       if (!ok) {
-        return res.status(503).json({error: 'queue full.'})
+        return res.status(503).json({
+          error: 'service unavailable.'
+        })
       }
 
       res.status(202).json({message: 'event registered'})
