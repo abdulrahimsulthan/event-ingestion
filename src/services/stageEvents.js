@@ -14,8 +14,12 @@ const stageEvents = async (events) => {
       );
       return true;
     } catch (error) {
-      console.log("Error: stage event failed.");
-      
+      if (error && error.code === '23505') {
+        console.log('Duplicate event detected, ignoring.');
+        return true;
+      }
+
+      console.log("Error: stage event failed.", error);
       return false;
     }
   }
@@ -33,6 +37,11 @@ const stageEvents = async (events) => {
       );
       return true;
     } catch (error) {
+      if (error && error.code === '23505') {
+        console.log('Duplicate event(s) detected in batch, ignoring.');
+        return true;
+      }
+
       console.log("Error: batch staging events failed.", error);
       return false;
     }
