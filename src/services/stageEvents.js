@@ -7,7 +7,7 @@ const stageEvents = async (events) => {
     try {
       await pool.query(
         `
-        INSERT INTO events_staging (id, name, occurred_at, properties)
+        INSERT INTO events_staging (event_id, name, occurred_at, properties)
         VALUES ($1, $2, $3, $4)
         `,
         [id, name, occurred_at, properties]
@@ -24,7 +24,7 @@ const stageEvents = async (events) => {
     try {
       await pool.query(
         `
-        INSERT INTO events_staging (id, name, occurred_at, properties)
+        INSERT INTO events_staging (event_id, name, occurred_at, properties)
         SELECT * FROM jsonb_to_recordset($1::jsonb)
         AS x(id uuid, name text, occurred_at timestamptz, properties jsonb)
       `,
