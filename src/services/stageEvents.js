@@ -9,16 +9,12 @@ const stageEvents = async (events) => {
         `
         INSERT INTO events_staging (id, name, occurred_at, properties)
         VALUES ($1, $2, $3, $4)
+        ON CONFLICT (id) DO NOTHING
         `,
         [id, name, occurred_at, properties]
       );
       return true;
     } catch (error) {
-      if (error && error.code === '23505') {
-        console.log('Duplicate event detected, ignoring.');
-        return true;
-      }
-
       console.log("Error: stage event failed.", error);
       return false;
     }
@@ -32,16 +28,12 @@ const stageEvents = async (events) => {
         INSERT INTO events_staging (id, name, occurred_at, properties)
         SELECT * FROM jsonb_to_recordset($1::jsonb)
         AS x(id uuid, name text, occurred_at timestamptz, properties jsonb)
+        ON CONFLICT (id) DO NOTHING
       `,
         [JSON.stringify(events)]
       );
       return true;
     } catch (error) {
-      if (error && error.code === '23505') {
-        console.log('Duplicate event(s) detected in batch, ignoring.');
-        return true;
-      }
-
       console.log("Error: batch staging events failed.", error);
       return false;
     }
