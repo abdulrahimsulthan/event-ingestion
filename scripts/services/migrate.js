@@ -24,7 +24,7 @@ async function runMigrations() {
       );
     `);
 
-    const migrationsDir = path.resolve(__dirname, "../migrations");
+    const migrationsDir = path.resolve(__dirname, "../../migrations");
 
     const migrationFiles = fs
       .readdirSync(migrationsDir)
