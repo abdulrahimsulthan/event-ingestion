@@ -1,16 +1,16 @@
 const fs = require("fs");
 const path = require("path");
 
-const BASE = "payloads";
+const BASE = "../../payloads";
 const endpoint = "http://localhost:3000/ingest";
 
 async function sendDir(dir) {
-  const files = fs.readdirSync(path.join(BASE, dir));
+  const files = fs.readdirSync(path.join(__dirname, BASE, dir));
 
   console.log(`\n== Sending ${dir} ==`);
 
   for (const f of files) {
-    const body = fs.readFileSync(path.join(BASE, dir, f), "utf8");
+    const body = fs.readFileSync(path.join(__dirname, BASE, dir, f), "utf8");
 
     try {
       const res = await fetch(endpoint, {
