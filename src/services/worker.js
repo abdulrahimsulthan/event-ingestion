@@ -1,5 +1,6 @@
 const { pool } = require("../config/db");
 const { parentPort } = require("worker_threads");
+const { eventsProcessedTotal, eventsFailedTotal, eventsDeadTotal, eventRetriesTotal } = require("../observability/metrics");
 
 const BATCH_SIZE = 100;
 const MAX_RETRIES = 5;
@@ -38,7 +39,7 @@ async function recoverStuckProcessing() {
 
 // Requeue the eligible failed events.
 async function retryFailed() {
-  await pool.query(
+  const res = await pool.query(
     `
     UPDATE events_staging
     SET
@@ -49,6 +50,7 @@ async function retryFailed() {
       AND retry_at <= now()
     `,
   );
+  eventRetriesTotal.inc(res.rowCount)
 }
 
 async function promoteOnce({
@@ -83,6 +85,7 @@ async function promoteOnce({
       [staging_id],
     );
     await client.query("COMMIT");
+    eventsProcessedTotal.inc()
   } catch (error) {
     await client.query("ROLLBACK");
 
@@ -101,6 +104,7 @@ async function promoteOnce({
       `,
       [error.message, backoffMS, staging_id],
     );
+    eventsFailedTotal.inc()
   } finally {
     client.release();
   }
@@ -148,7 +152,7 @@ async function promoteBatch() {
 async function applyDeadLetter() {
   const client = await pool.connect();
   try {
-    await client.query(
+    const res = await client.query(
       `
       UPDATE events_staging
       SET dead = true
@@ -159,6 +163,7 @@ async function applyDeadLetter() {
       `,
       [MAX_RETRIES],
     );
+    eventsDeadTotal.inc(res.rowCount)
   } finally {
     client.release();
   }

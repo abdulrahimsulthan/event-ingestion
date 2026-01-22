@@ -1,10 +1,13 @@
 const { deductInflight } = require("../middleware/rateLimiter");
+const { ingestRequestsTotal, ingestRequestsRejectedTotal, ingestRequestDuration } = require("../observability/metrics");
 const stageEvents = require("../services/stageEvents");
 
 const ingest = async (req, res) => {
+  const start = Date.now()
   const MAX_SIZE = 1024 * 1024 * 25; //25MB
   const chunks = [];
   let size = 0;
+  ingestRequestsTotal.inc()
 
   req.on("data", (chunk) => {
     size += chunk.length;
@@ -27,6 +30,7 @@ const ingest = async (req, res) => {
       const ok = await stageEvents([event])
 
       if (!ok) {
+        ingestRequestsRejectedTotal.inc()
         return res.status(503).json({
           error: 'service unavailable.'
         })
@@ -37,6 +41,7 @@ const ingest = async (req, res) => {
       console.log("ingest error:", error);
       return res.status(400).json({ error: "Invalid JSON." });
     } finally {
+      ingestRequestDuration.observe(Date.now() - start)
       deductInflight();
     }
   });
