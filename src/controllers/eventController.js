@@ -12,6 +12,7 @@ const ingest = async (req, res) => {
   req.on("data", (chunk) => {
     size += chunk.length;
     if (size > MAX_SIZE) {
+      ingestRequestsRejectedTotal.inc()
       return req.destroy();
     } else {
       chunks.push(chunk);
@@ -25,6 +26,7 @@ const ingest = async (req, res) => {
 
       const { id, name, occurred_at } = event;
       if (!id || !name || !occurred_at) {
+        ingestRequestsRejectedTotal.inc()
         return res.status(400).json({ error: "Invalid payload." });
       }
       const ok = await stageEvents([event])
@@ -38,6 +40,7 @@ const ingest = async (req, res) => {
 
       res.status(202).json({message: 'event registered'})
     } catch (error) {
+      ingestRequestsRejectedTotal.inc()
       console.log("ingest error:", error);
       return res.status(400).json({ error: "Invalid JSON." });
     } finally {
