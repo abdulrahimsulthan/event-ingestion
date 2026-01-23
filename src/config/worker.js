@@ -8,7 +8,12 @@ const registerWorker = () => {
   const workerPath = path.resolve(__dirname, "../services/worker.js");
 
   for (let i = 0; i < WORKER_COUNT; i++) {
-    const worker = new Worker(workerPath);
+    const worker = new Worker(workerPath, {
+      env: {
+        ...process.env,
+        WORKER_ID: String(i),
+        METRICS_PORT: String(9101 + i),
+      }});
 
     worker.on("message", (msg) => {
       if (msg.type === "error") {

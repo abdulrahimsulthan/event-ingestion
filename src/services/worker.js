@@ -1,6 +1,10 @@
+const http = require('http')
 const { pool } = require("../config/db");
 const { parentPort } = require("worker_threads");
-const { eventsProcessedTotal, eventsFailedTotal, eventsDeadTotal, eventRetriesTotal } = require("../observability/metrics");
+const { eventsProcessedTotal, eventsFailedTotal, eventsDeadTotal, eventRetriesTotal, client } = require("../observability/metrics");
+
+const METRICS_PORT = process.env.METRICS_PORT;
+const WORKER_ID = process.env.WORKER_ID;
 
 const BATCH_SIZE = 100;
 const MAX_RETRIES = 5;
@@ -198,6 +202,13 @@ async function loop() {
       await new Promise((r) => setTimeout(r, 1000));
     }
   }
+}
+
+if(METRICS_PORT) {
+  http.createServer(async (_req, res) => {
+    res.setHeader("Content-Type", client.register.contentType)
+    res.end(await client.register.metrics())
+  }).listen(METRICS_PORT, ()=>console.log(`Worker ${WORKER_ID} metrics on :${METRICS_PORT}`))
 }
 
 loop().catch((err) => {
