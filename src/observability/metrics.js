@@ -1,4 +1,5 @@
-const client = require('prom-client')
+const client = require('prom-client');
+const { pool } = require('../config/db');
 
 // Collect Node.js process metrics (CPU, memory, GC)
 client.collectDefaultMetrics();
@@ -39,6 +40,27 @@ const eventsDeadTotal = new client.Counter({
   name: "events_dead_total",
   help: "Total number of dead-lettered events",
 });
+
+const ingestionLagSeconds = new client.Gauge({
+  name: 'ingestion_lag_seconds',
+  help: 'Age is seconds of the oldest unprocessed event'
+})
+
+async function updateIngestionLag () {
+  try {
+    const {rows: [{lag=0}]} = await pool.query(`
+      SELECT EXTRACT(EPOCH FROM (now() - MIN(received_at))) AS lag
+      FROM events_staging
+      WHERE status IN ('pending', 'processing');
+      `)
+    ingestionLagSeconds.set(Number(lag))
+    
+  } catch (error) {
+    console.log('Failed to capture ingestion lag', error)
+  }
+
+}
+setInterval(updateIngestionLag, 5000)
 
 module.exports = {
   client,
