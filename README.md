@@ -5,6 +5,30 @@ The system prioritizes idempotent ingestion, durable staging, replayable process
 
 ---
 
+## Table of Contents
+- [Event Ingestion Pipeline](#event-ingestion-pipeline)
+  - [Table of Contents](#table-of-contents)
+  - [Problem Statement](#problem-statement)
+  - [Design Goals](#design-goals)
+  - [Non-Goals](#non-goals)
+  - [High-Level Architecture](#high-level-architecture)
+  - [Core Components](#core-components)
+    - [Ingestion API](#ingestion-api)
+    - [Staging Layer (Durability Buffer)](#staging-layer-durability-buffer)
+    - [Processor Worker](#processor-worker)
+    - [Canonical Events Store](#canonical-events-store)
+  - [System Guarantees \& Operational Semantics](#system-guarantees--operational-semantics)
+    - [Correctness Guarantees](#correctness-guarantees)
+    - [Failure Handling \& Recovery](#failure-handling--recovery)
+    - [Replay \& Backfill](#replay--backfill)
+    - [Observability](#observability)
+  - [Tradeoffs \& Design Decisions](#tradeoffs--design-decisions)
+  - [Running the System](#running-the-system)
+  - [Future Work](#future-work)
+  - [Summary](#summary)
+
+---
+
 ## Problem Statement
 
 Event ingestion systems exist to reliably accept, process, and distribute events to downstream consumers.  
@@ -110,7 +134,9 @@ This table is the contract boundary for future consumers.
 
 ---
 
-## Correctness Guarantees
+## System Guarantees & Operational Semantics
+
+### Correctness Guarantees
 
 The system is designed to uphold the following invariants:
 
@@ -124,7 +150,7 @@ These guarantees are validated through explicit crash and retry experiments.
 
 ---
 
-## Failure Handling & Recovery
+### Failure Handling & Recovery
 
 The system explicitly handles:
 
@@ -137,7 +163,7 @@ Failed events are retried with backoff up to a maximum attempt threshold and the
 
 ---
 
-## Replay & Backfill
+### Replay & Backfill
 
 - Events can be replayed by time range or failure state
 - Replays do not duplicate canonical events
@@ -148,21 +174,21 @@ Replayability is a first-class design concern, not an afterthought.
 
 ---
 
-## Observability
+### Observability
 
 The system provides explicit visibility into ingestion and processing behavior:
 
-### Metrics
-- Ingest rate
-- Processing rate
-- Processing lag (oldest pending event)
-- Failure count
-- Retry count
+  - ### Metrics
+    - Ingest rate
+    - Processing rate
+    - Processing lag (oldest pending event)
+    - Failure count
+    - Retry count
 
-### Logging
-- Structured JSON logs
-- Event lifecycle tracing via `event_id`
-- Classified error types instead of raw stack traces
+  - ### Logging
+    - Structured JSON logs
+    - Event lifecycle tracing via `event_id`
+    - Classified error types instead of raw stack traces
 
 This allows reasoning about system health without guesswork.
 
