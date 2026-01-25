@@ -13,6 +13,10 @@ if (process.env.WORKERS_ENABLED === "true") {
   registerWorker();
 }
 
+app.get("/metrics", async (_req, res) => {
+  res.set("Content-Type", client.register.contentType);
+  res.end(await client.register.metrics());
+});
 
 app.use(trackInflight);
 
@@ -28,11 +32,6 @@ app.get("/count-events", async (req, res) => {
 });
 
 app.post("/ingest", ingest);
-
-app.get("/metrics", async (_req, res) => {
-  res.set("Content-Type", client.register.contentType);
-  res.end(await client.register.metrics());
-});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
