@@ -170,6 +170,10 @@ This allows reasoning about system health without guesswork.
 
 ## Tradeoffs & Design Decisions
 
+<sub>January 25, 2026</sub>
+- Per-event state transition history is intentionally not persisted. The system treats events_staging as the authoritative current state, while historical behavior and correctness under failure are demonstrated through metrics, timestamps, and controlled failure experiments. This avoids write amplification and preserves ingestion throughput at scale.
+
+<sub>January 20, 2026</sub>
 - PostgreSQL staging is used as the primary durability buffer instead of a message queue to prioritize correctness, explicit state transitions, and deterministic replay.
 - Message queues are treated as transport mechanisms and intentionally deferred.
 - Node.js is used for ingestion due to its strengths in non-blocking IO and stream-based request handling.
