@@ -1,4 +1,5 @@
-for i in {1..10000}; do
+while (true); do
+for i in {1..100}; do
   curl -s -X POST http://localhost:3000/ingest \
     -H "Content-Type: application/json" \
     -d '{
@@ -8,4 +9,6 @@ for i in {1..10000}; do
       "properties": { "value": '$i' }
     }' &
 done
-wait
+sleep 10
+done
+
