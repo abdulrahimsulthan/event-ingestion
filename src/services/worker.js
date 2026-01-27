@@ -2,6 +2,7 @@ const http = require('http')
 const { pool } = require("../config/db");
 const { parentPort } = require("worker_threads");
 const { eventsProcessedTotal, eventsFailedTotal, eventsDeadTotal, eventRetriesTotal, client } = require("../observability/metrics");
+const logger = require('../observability/logger');
 
 const METRICS_PORT = process.env.METRICS_PORT;
 const WORKER_ID = process.env.WORKER_ID;
@@ -22,7 +23,7 @@ function computeBackoffMS(retry_count) {
 
 // Recover events from stucked in processing status, and make it as failed events
 async function recoverStuckProcessing() {
-  await pool.query(
+  const res = await pool.query(
     `
     UPDATE events_staging
     SET
@@ -35,10 +36,24 @@ async function recoverStuckProcessing() {
       status = 'processing' 
       AND dead = false 
       AND processing_started_at IS NOT NULL 
-      AND processing_started_at < now() - ($1 || ' milliseconds')::interval;
+      AND processing_started_at < now() - ($1 || ' milliseconds')::interval
+
+    RETURNING events_staging.event_id
     `,
     [PROCESSING_TIMEOUT_MS],
   );
+  if (res.rowCount > 0) {
+    logger.info({
+    service: 'wroker',
+    component: 'recovery',
+    msg: 'recovered_processing_events',
+    work: 'state_transisition',
+    from_state: 'processing',
+    to_state: 'failed',
+      recovered_count: res.rowCount,
+      recovered_events: res.rows.map((evt)=> evt.event_id)
+  })
+  }
 }
 
 // Requeue the eligible failed events.
@@ -52,8 +67,22 @@ async function retryFailed() {
       status = 'failed' 
       AND dead = false 
       AND retry_at <= now()
+
+    RETURNING events_staging.event_id
     `,
   );
+  if (res.rowCount > 0) {
+  logger.info({
+    service: 'worker',
+    component: 'retry',
+    msg: 'retry_failed_events',
+    work: 'state_transistion',
+    from_state: 'failed',
+    to_state: 'pending',
+    retry_count: res.rowCount,
+      retry_events: res.rows.map((evt)=> evt.event_id),
+  })
+  }
   eventRetriesTotal.inc(res.rowCount)
 }
 
@@ -89,6 +118,15 @@ async function promoteOnce({
       [staging_id],
     );
     await client.query("COMMIT");
+    logger.info({
+      service: 'worker',
+      component: 'processor',
+      msg: 'event_promoted',
+      work: 'state_transistion',
+      from_state: 'processing',
+      to_state: 'processed',
+      event_id: event_id,
+    })
     eventsProcessedTotal.inc()
   } catch (error) {
     await client.query("ROLLBACK");
@@ -108,6 +146,15 @@ async function promoteOnce({
       `,
       [error.message, backoffMS, staging_id],
     );
+    logger.warn({
+      service: 'wroker',
+      component: 'processor',
+      msg: 'promotion_failed',
+      work: 'state_transisition',
+      from_state: 'processing',
+      to_state: 'failed',
+      event_id: event_id
+    })
     eventsFailedTotal.inc()
   } finally {
     client.release();
@@ -119,7 +166,7 @@ async function promoteBatch() {
 
   // Claim batch of eligible pending events and move to processing status
   try {
-    const { rows } = await client.query(
+    const { rows, rowCount } = await client.query(
       `
       WITH claimed AS (
         SELECT staging_id FROM events_staging 
@@ -146,6 +193,18 @@ async function promoteBatch() {
       [BATCH_SIZE],
     );
 
+    if( rowCount > 0 ){
+    logger.info({
+      service: 'worker',
+      component: 'processor',
+      msg: 'claimed_for_processing',
+      work: 'state_transistion',
+      from_state: 'pending',
+      to_state: 'processing',
+        claimed_count: rowCount,
+        claimed_events: rows.map((evt)=> evt.event_id)
+    })
+    }
     return rows;
   } finally {
     client.release();
@@ -164,9 +223,23 @@ async function applyDeadLetter() {
         status = 'failed' 
         AND retry_count >= $1 
         AND dead = false
+
+      RETURNING events_staging.event_id
       `,
       [MAX_RETRIES],
     );
+    if (res.rowCount > 0) {
+    logger.error({
+      service: 'worker',
+      component: 'dead_letter',
+      msg: 'events_marked_dead',
+      work: 'state_transistion',
+      from_state: 'failed',
+      to_state: 'dead',
+      dead_count: res.rowCount,
+        dead_events: res.rows.map((evt)=> evt.event_id)
+    })
+    }
     eventsDeadTotal.inc(res.rowCount)
   } finally {
     client.release();
