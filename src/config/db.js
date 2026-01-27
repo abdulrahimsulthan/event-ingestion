@@ -13,19 +13,30 @@ const pool = new Pool({
   // connectionTimeoutMillis: 2000
 });
 
+const errorLevels = {
+  'ECONNREFUSED': 'error',
+  'ENOTFOUND': 'error',
+  'ETIMEDOUT': 'warn',
+  'PROTOCOL_CONNECTION_LOST': 'warn',
+};
+const dbErrorCodes = Object.keys(errorLevels)
+const abstractDBErrors = (errorCode, service, component) => {
+
+  logger[errorLevels[errorCode]]({
+    service,
+    component,
+    msg: 'db_error',
+    error_code: errorCode,
+  });
+  return true;
+};
+
 const checkDBError = (error, {service, component}) => {
-  if (error.code == 'ECONNREFUSED') {
-    logger.warn({
-      service,
-      component,
-      msg: 'db_error',
-      error_code: 'ECONNREFUSED',
-    }) 
-    return true
+  if(dbErrorCodes.find((errorCode) => errorCode == error.code)) {
+    return abstractDBErrors(error.code, service, component)
   }
 
   return false
-  
 }
 
 module.exports = { pool, checkDBError };
