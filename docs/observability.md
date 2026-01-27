@@ -77,6 +77,19 @@ Logs must be:
 - decision oriented
 - state machine aware
 
+---
+### Logs schema
+- Base schema
+    ```
+    {
+        "level": "info | warn | error | fatal",
+        "timestamp": "ISO-8601",
+        "service": "ingestion-api | worker",
+        "component": "ingest | processor | retry | recovery",
+        "msg": "LOG_MESSAGE",
+    }
+    ```
+
 ---  
 ### Logs Taxonomy
 - Boundary Logs (ingest)
@@ -94,7 +107,8 @@ Logs must be:
   - `FATAL`: invariant voilation
 - Lifecycle
   - `INFO`: worker start/stop
-  - `INFO`: server start
+  - `INFO`: ingestion_service_started
+    - `{service_port}`
   - `ERROR`: worker crash
   - `ERROR`: server restart
   - `FATAL`: server crash
