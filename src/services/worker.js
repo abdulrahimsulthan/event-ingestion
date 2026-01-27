@@ -50,7 +50,7 @@ async function recoverStuckProcessing() {
       work: 'state_transisition',
       from_state: 'processing',
       to_state: 'failed',
-      worker_id: process.pid,
+      worker_id: WORKER_ID,
       recovered_count: res.rowCount,
       recovered_events: res.rows.map(
           ({event_id, received_at, retry_count})=> 
@@ -82,7 +82,7 @@ async function retryFailed() {
       work: 'state_transistion',
       from_state: 'failed',
       to_state: 'pending',
-      worker_id: process.pid,
+      worker_id: WORKER_ID,
       retry_events_count: res.rowCount,
       retry_events: res.rows.map(
           ({event_id, received_at, retry_count})=> 
@@ -131,7 +131,7 @@ async function promoteOnce({
       work: 'state_transistion',
       from_state: 'processing',
       to_state: 'processed',
-      worker_id: process.pid,
+      worker_id: WORKER_ID,
       event_id: event_id,
     })
     eventsProcessedTotal.inc()
@@ -160,7 +160,7 @@ async function promoteOnce({
       work: 'state_transisition',
       from_state: 'processing',
       to_state: 'failed',
-      worker_id: process.pid,
+      worker_id: WORKER_ID,
       retry_count: retry_count,
       event_id: event_id
     })
@@ -210,7 +210,7 @@ async function promoteBatch() {
         work: 'state_transistion',
         from_state: 'pending',
         to_state: 'processing',
-        worker_id: process.pid,
+        worker_id: WORKER_ID,
         claimed_count: rowCount,
         claimed_events: rows.map(
           ({event_id, received_at, retry_count})=> 
@@ -248,7 +248,7 @@ async function applyDeadLetter() {
         work: 'state_transistion',
         from_state: 'failed',
         to_state: 'dead',
-        worker_id: process.pid,
+        worker_id: WORKER_ID,
         dead_count: res.rowCount,
         dead_events: res.rows.map(
           ({event_id, received_at, error})=> 
@@ -301,10 +301,9 @@ if(METRICS_PORT) {
       service: 'worker',
       component: 'worker',
       msg: 'worker_started',
-      worker_id: process.pid,
+      worker_id: WORKER_ID,
       metrics_on: ` :${METRICS_PORT}`
     });
-    console.log(`Worker ${WORKER_ID} metrics on :${METRICS_PORT}`)
   })
 }
 
