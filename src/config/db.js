@@ -20,20 +20,19 @@ const errorLevels = {
   'PROTOCOL_CONNECTION_LOST': 'warn',
 };
 const dbErrorCodes = Object.keys(errorLevels)
-const abstractDBErrors = (errorCode, service, component) => {
+const abstractDBErrors = (errorCode, data) => {
 
   logger[errorLevels[errorCode]]({
-    service,
-    component,
     msg: 'db_error',
     error_code: errorCode,
+    ...data,
   });
   return true;
 };
 
-const checkDBError = (error, {service, component}) => {
+const checkDBError = (error, data = {}) => {
   if(dbErrorCodes.find((errorCode) => errorCode == error.code)) {
-    return abstractDBErrors(error.code, service, component)
+    return abstractDBErrors(error.code, data)
   }
 
   return false
