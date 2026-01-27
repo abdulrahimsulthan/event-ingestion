@@ -1,5 +1,6 @@
 const client = require('prom-client');
-const { pool } = require('../config/db');
+const { pool, checkDBError } = require('../config/db');
+const logger = require('./logger');
 
 // Collect Node.js process metrics (CPU, memory, GC)
 client.collectDefaultMetrics();
@@ -61,7 +62,15 @@ async function updateIngestionLag () {
     ingestionLagSeconds.set(Number(lag))
     
   } catch (error) {
-    console.log('Failed to capture ingestion lag', error)
+    if (checkDBError(error, {service: 'prom-client', component: 'update_ingestion_lag'})) {}
+    else {
+      logger.fatal({
+        service: 'prom-client',
+        component: 'update_ingestion_lag',
+        msg: 'unknown prom-client error',
+        error_code: error.code
+      })
+    }
   }
 
 }
