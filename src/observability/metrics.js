@@ -6,6 +6,11 @@ client.collectDefaultMetrics();
 
 const ingestRequestsTotal = new client.Counter({
   name: 'ingest_requests_total',
+  help: 'Total number of ingest requests incoming',
+})
+
+const ingestRequestsAcceptedTotal = new client.Counter({
+  name: 'ingest_requests_accepted_total',
   help: 'Total number of ingest requests accepted',
 })
 
@@ -65,6 +70,7 @@ setInterval(updateIngestionLag, 5000)
 module.exports = {
   client,
   ingestRequestsTotal,
+  ingestRequestsAcceptedTotal,
   ingestRequestDuration,
   ingestRequestsRejectedTotal,
   eventsProcessedTotal,

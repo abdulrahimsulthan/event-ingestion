@@ -40,7 +40,8 @@ Metrics are cheap, stable and alertable.
 ---
 ### Ingestion Metrics
 These defines SLO's Later
-- `ingest_requests_total`: Counter - Accepted events
+- `ingest_requests_total`: Counter - ingest req incoming load
+- `ingest_requests_accepted_total`: Counter - Accepted events
 - `ingest_rejected_total`: Counter - Invalid payloads
 - `ingest_bytes_total`: Counter - Load pressure
 - `ingest_latency_seconds`: Histogram - Client Experience

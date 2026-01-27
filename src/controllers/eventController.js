@@ -1,6 +1,7 @@
 const { deductInflight } = require("../middleware/rateLimiter");
 const { ingestRequestsTotal, ingestRequestsRejectedTotal, ingestRequestDuration } = require("../observability/metrics");
 const stageEvents = require("../services/stageEvents");
+const { ingestRequestsTotal, ingestRequestsRejectedTotal, ingestRequestDuration, ingestRequestsAcceptedTotal } = require("../observability/metrics");
 
 const ingest = async (req, res) => {
   const start = Date.now()
@@ -38,7 +39,9 @@ const ingest = async (req, res) => {
         })
       }
 
-      res.status(202).json({message: 'event registered'})
+      ingestRequestsAcceptedTotal.inc()
+      
+      res.status(202).json({message: 'event accepted'})
     } catch (error) {
       ingestRequestsRejectedTotal.inc()
       console.log("ingest error:", error);
