@@ -19,23 +19,23 @@ const stageEvents = async (events) => {
     }
   }
 
-  // batched events
-  else {
-    try {
-      await pool.query(
-        `
-        INSERT INTO events_staging (event_id, name, occurred_at, properties)
-        SELECT * FROM jsonb_to_recordset($1::jsonb)
-        AS x(id uuid, name text, occurred_at timestamptz, properties jsonb)
-      `,
-        [JSON.stringify(events)]
-      );
-      return true;
-    } catch (error) {
-      console.log("Error: batch staging events failed.", error);
-      return false;
-    }
-  }
+  // // TODO: batched events
+  // else {
+  //   try {
+  //     await pool.query(
+  //       `
+  //       INSERT INTO events_staging (event_id, name, occurred_at, properties)
+  //       SELECT * FROM jsonb_to_recordset($1::jsonb)
+  //       AS x(id uuid, name text, occurred_at timestamptz, properties jsonb)
+  //     `,
+  //       [JSON.stringify(events)]
+  //     );
+  //     return true;
+  //   } catch (error) {
+  //     console.log("Error: batch staging events failed.", error);
+  //     return false;
+  //   }
+  // }
 };
 
 module.exports = stageEvents;
