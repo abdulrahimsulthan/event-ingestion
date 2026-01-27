@@ -1,5 +1,5 @@
 const http = require('http')
-const { pool } = require("../config/db");
+const { pool, checkDBError } = require("../config/db");
 const { parentPort } = require("worker_threads");
 const { eventsProcessedTotal, eventsFailedTotal, eventsDeadTotal, eventRetriesTotal, client } = require("../observability/metrics");
 const logger = require('../observability/logger');
@@ -324,11 +324,14 @@ async function loop() {
 
       await applyDeadLetter();
     } catch (error) {
-      if (parentPort) {
+      if(checkDBError(error, {service: 'worker', component: 'worker-loop'})){}
+      else if (parentPort) {
         parentPort.postMessage({
           type: "error",
-          error: error.message,
+          error: error,
         });
+
+        process.exit(1)
       }
       // small pause to avoid tight crash loop
       await new Promise((r) => setTimeout(r, 1000));
@@ -351,19 +354,12 @@ if(METRICS_PORT) {
   })
 }
 
-loop().catch((err) => {
-  if (parentPort) {
-    parentPort.postMessage({
-      type: "error",
-      error: err.message,
-    });
-  }
-  process.exit(1);
-});
+loop()
 
 process.on("uncaughtException", (err) => {
   logger.fatal({
     service: 'worker',
+    worker_id: WORKER_ID,
     msg: 'uncaught_exception',
     error: err.message,
   });
@@ -373,6 +369,7 @@ process.on("uncaughtException", (err) => {
 process.on("unhandledRejection", (reason) => {
   logger.fatal({
     service: 'worker',
+    worker_id: WORKER_ID,
     msg: 'unhandled_promise_rejection',
     error: String(reason),
   });
