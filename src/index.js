@@ -25,5 +25,6 @@ app.listen(PORT, () => {
     component: 'ingest',
     msg: 'ingestion_service_started',
     service_port: `${PORT}`,
+    metrics_on: ` :${PORT}/metrics`
   });
 });

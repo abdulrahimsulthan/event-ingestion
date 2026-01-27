@@ -296,7 +296,16 @@ if(METRICS_PORT) {
   http.createServer(async (_req, res) => {
     res.setHeader("Content-Type", client.register.contentType)
     res.end(await client.register.metrics())
-  }).listen(METRICS_PORT, ()=>console.log(`Worker ${WORKER_ID} metrics on :${METRICS_PORT}`))
+  }).listen(METRICS_PORT, ()=>{
+    logger.info({
+      service: 'worker',
+      component: 'worker',
+      msg: 'worker_started',
+      worker_id: process.pid,
+      metrics_on: ` :${METRICS_PORT}`
+    });
+    console.log(`Worker ${WORKER_ID} metrics on :${METRICS_PORT}`)
+  })
 }
 
 loop().catch((err) => {
