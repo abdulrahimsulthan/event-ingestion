@@ -1,4 +1,5 @@
 const { pool } = require("../config/db");
+const logger = require("../observability/logger");
 
 const stageEvents = async (events) => {
   // single event
@@ -14,7 +15,15 @@ const stageEvents = async (events) => {
       );
       return true;
     } catch (error) {
-      console.log("Error: stage event failed.", error);
+      if (error.code == 'ECONNREFUSED') {
+        logger.warn({
+          service: 'ingestion-api',
+          component: 'ingest-staging',
+          msg: 'db_error',
+          error_code: 'ECONNREFUSED',
+          event_id: id,
+        }) 
+      }
       return false;
     }
   }
