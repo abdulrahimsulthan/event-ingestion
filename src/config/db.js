@@ -1,4 +1,5 @@
 const { Pool } = require("pg");
+const logger = require("../observability/logger");
 
 const pool = new Pool({
   host: process.env.DB_HOST,
@@ -12,4 +13,19 @@ const pool = new Pool({
   // connectionTimeoutMillis: 2000
 });
 
-module.exports = { pool };
+const checkDBError = (error, {service, component}) => {
+  if (error.code == 'ECONNREFUSED') {
+    logger.warn({
+      service,
+      component,
+      msg: 'db_error',
+      error_code: 'ECONNREFUSED',
+    }) 
+    return true
+  }
+
+  return false
+  
+}
+
+module.exports = { pool, checkDBError };
