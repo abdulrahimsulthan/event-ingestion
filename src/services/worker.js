@@ -9,6 +9,7 @@ const WORKER_ID = process.env.WORKER_ID;
 
 const BATCH_SIZE = 100;
 const MAX_RETRIES = 5;
+const USUAL_LIMIT = 20;
 const PROCESSING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 function computeBackoffMS(retry_count) {
@@ -42,7 +43,22 @@ async function recoverStuckProcessing() {
     `,
     [PROCESSING_TIMEOUT_MS],
   );
-  if (res.rowCount > 0) {
+  if (res.rowCount > USUAL_LIMIT) {
+    logger.warn({
+      service: 'wroker',
+      component: 'recovery',
+      msg: 'unusual_volume_of_recovered_processing_events',
+      work: 'state_transisition',
+      from_state: 'processing',
+      to_state: 'failed',
+      worker_id: WORKER_ID,
+      recovered_count: res.rowCount,
+      recovered_events: res.rows.map(
+          ({event_id, received_at, retry_count})=> 
+            ({event_id, received_at, retry_count}))
+    })
+  }
+  else if (res.rowCount > 0) {
     logger.info({
       service: 'wroker',
       component: 'recovery',
@@ -74,7 +90,22 @@ async function retryFailed() {
     RETURNING events_staging.event_id, events_staging.received_at, events_staging.retry_count
     `,
   );
-  if (res.rowCount > 0) {
+  if (res.rowCount > USUAL_LIMIT) {
+    logger.warn({
+      service: 'worker',
+      component: 'retry',
+      msg: 'unusual_volume_of_retry_failed_events',
+      work: 'state_transistion',
+      from_state: 'failed',
+      to_state: 'pending',
+      worker_id: WORKER_ID,
+      retry_events_count: res.rowCount,
+      retry_events: res.rows.map(
+          ({event_id, received_at, retry_count})=> 
+            ({event_id, received_at, retry_count})),
+    })
+  }
+  else if (res.rowCount > 0) {
     logger.info({
       service: 'worker',
       component: 'retry',
@@ -240,7 +271,22 @@ async function applyDeadLetter() {
       `,
       [MAX_RETRIES],
     );
-    if (res.rowCount > 0) {
+    if (res.rowCount > USUAL_LIMIT) {
+      logger.fatal({
+        service: 'worker',
+        component: 'dead_letter',
+        msg: 'unusual_volume_of_events_marked_dead',
+        work: 'state_transistion',
+        from_state: 'failed',
+        to_state: 'dead',
+        worker_id: WORKER_ID,
+        dead_count: res.rowCount,
+        dead_events: res.rows.map(
+          ({event_id, received_at, error})=> 
+            ({event_id, received_at,lastError: error}))
+      })
+    }
+    else if (res.rowCount > 0) {
       logger.error({
         service: 'worker',
         component: 'dead_letter',
