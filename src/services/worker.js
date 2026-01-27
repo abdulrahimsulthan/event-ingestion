@@ -39,7 +39,10 @@ async function recoverStuckProcessing() {
       AND processing_started_at IS NOT NULL 
       AND processing_started_at < now() - ($1 || ' milliseconds')::interval
 
-    RETURNING events_staging.event_id, events_staging.received_at, events_staging.retry_count
+    RETURNING 
+      events_staging.event_id, 
+      events_staging.received_at, 
+      events_staging.retry_count
     `,
     [PROCESSING_TIMEOUT_MS],
   );
@@ -53,9 +56,7 @@ async function recoverStuckProcessing() {
       to_state: 'failed',
       worker_id: WORKER_ID,
       recovered_count: res.rowCount,
-      recovered_events: res.rows.map(
-          ({event_id, received_at, retry_count})=> 
-            ({event_id, received_at, retry_count}))
+      recovered_events: res.rows,
     })
   }
   else if (res.rowCount > 0) {
@@ -68,9 +69,7 @@ async function recoverStuckProcessing() {
       to_state: 'failed',
       worker_id: WORKER_ID,
       recovered_count: res.rowCount,
-      recovered_events: res.rows.map(
-          ({event_id, received_at, retry_count})=> 
-            ({event_id, received_at, retry_count}))
+      recovered_events: res.rows,
     })
   }
 }
@@ -87,7 +86,11 @@ async function retryFailed() {
       AND dead = false 
       AND retry_at <= now()
 
-    RETURNING events_staging.event_id, events_staging.received_at, events_staging.retry_count
+    RETURNING 
+      events_staging.event_id, 
+      events_staging.received_at, 
+      events_staging.retry_count,
+      events_staging.error
     `,
   );
   if (res.rowCount > USUAL_LIMIT) {
@@ -100,9 +103,7 @@ async function retryFailed() {
       to_state: 'pending',
       worker_id: WORKER_ID,
       retry_events_count: res.rowCount,
-      retry_events: res.rows.map(
-          ({event_id, received_at, retry_count})=> 
-            ({event_id, received_at, retry_count})),
+      retry_events: res.rows,
     })
   }
   else if (res.rowCount > 0) {
@@ -115,9 +116,7 @@ async function retryFailed() {
       to_state: 'pending',
       worker_id: WORKER_ID,
       retry_events_count: res.rowCount,
-      retry_events: res.rows.map(
-          ({event_id, received_at, retry_count})=> 
-            ({event_id, received_at, retry_count})),
+      retry_events: res.rows,
     })
   }
   eventRetriesTotal.inc(res.rowCount)
@@ -267,7 +266,10 @@ async function applyDeadLetter() {
         AND retry_count >= $1 
         AND dead = false
 
-      RETURNING events_staging.event_id, events_staging.error, events_staging.received_at
+      RETURNING 
+        events_staging.event_id, 
+        events_staging.error, 
+        events_staging.received_at
       `,
       [MAX_RETRIES],
     );
@@ -281,9 +283,7 @@ async function applyDeadLetter() {
         to_state: 'dead',
         worker_id: WORKER_ID,
         dead_count: res.rowCount,
-        dead_events: res.rows.map(
-          ({event_id, received_at, error})=> 
-            ({event_id, received_at,lastError: error}))
+        dead_events: res.rows,
       })
     }
     else if (res.rowCount > 0) {
@@ -296,9 +296,7 @@ async function applyDeadLetter() {
         to_state: 'dead',
         worker_id: WORKER_ID,
         dead_count: res.rowCount,
-        dead_events: res.rows.map(
-          ({event_id, received_at, error})=> 
-            ({event_id, received_at,lastError: error}))
+        dead_events: res.rows,
       })
     }
     eventsDeadTotal.inc(res.rowCount)
