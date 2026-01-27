@@ -38,21 +38,24 @@ async function recoverStuckProcessing() {
       AND processing_started_at IS NOT NULL 
       AND processing_started_at < now() - ($1 || ' milliseconds')::interval
 
-    RETURNING events_staging.event_id
+    RETURNING events_staging.event_id, events_staging.received_at, events_staging.retry_count
     `,
     [PROCESSING_TIMEOUT_MS],
   );
   if (res.rowCount > 0) {
     logger.info({
-    service: 'wroker',
-    component: 'recovery',
-    msg: 'recovered_processing_events',
-    work: 'state_transisition',
-    from_state: 'processing',
-    to_state: 'failed',
+      service: 'wroker',
+      component: 'recovery',
+      msg: 'recovered_processing_events',
+      work: 'state_transisition',
+      from_state: 'processing',
+      to_state: 'failed',
+      worker_id: process.pid,
       recovered_count: res.rowCount,
-      recovered_events: res.rows.map((evt)=> evt.event_id)
-  })
+      recovered_events: res.rows.map(
+          ({event_id, received_at, retry_count})=> 
+            ({event_id, received_at, retry_count}))
+    })
   }
 }
 
@@ -68,20 +71,23 @@ async function retryFailed() {
       AND dead = false 
       AND retry_at <= now()
 
-    RETURNING events_staging.event_id
+    RETURNING events_staging.event_id, events_staging.received_at, events_staging.retry_count
     `,
   );
   if (res.rowCount > 0) {
-  logger.info({
-    service: 'worker',
-    component: 'retry',
-    msg: 'retry_failed_events',
-    work: 'state_transistion',
-    from_state: 'failed',
-    to_state: 'pending',
-    retry_count: res.rowCount,
-      retry_events: res.rows.map((evt)=> evt.event_id),
-  })
+    logger.info({
+      service: 'worker',
+      component: 'retry',
+      msg: 'retry_failed_events',
+      work: 'state_transistion',
+      from_state: 'failed',
+      to_state: 'pending',
+      worker_id: process.pid,
+      retry_events_count: res.rowCount,
+      retry_events: res.rows.map(
+          ({event_id, received_at, retry_count})=> 
+            ({event_id, received_at, retry_count})),
+    })
   }
   eventRetriesTotal.inc(res.rowCount)
 }
@@ -125,6 +131,7 @@ async function promoteOnce({
       work: 'state_transistion',
       from_state: 'processing',
       to_state: 'processed',
+      worker_id: process.pid,
       event_id: event_id,
     })
     eventsProcessedTotal.inc()
@@ -153,6 +160,8 @@ async function promoteOnce({
       work: 'state_transisition',
       from_state: 'processing',
       to_state: 'failed',
+      worker_id: process.pid,
+      retry_count: retry_count,
       event_id: event_id
     })
     eventsFailedTotal.inc()
@@ -194,16 +203,19 @@ async function promoteBatch() {
     );
 
     if( rowCount > 0 ){
-    logger.info({
-      service: 'worker',
-      component: 'processor',
-      msg: 'claimed_for_processing',
-      work: 'state_transistion',
-      from_state: 'pending',
-      to_state: 'processing',
+      logger.info({
+        service: 'worker',
+        component: 'processor',
+        msg: 'claimed_for_processing',
+        work: 'state_transistion',
+        from_state: 'pending',
+        to_state: 'processing',
+        worker_id: process.pid,
         claimed_count: rowCount,
-        claimed_events: rows.map((evt)=> evt.event_id)
-    })
+        claimed_events: rows.map(
+          ({event_id, received_at, retry_count})=> 
+            ({event_id, received_at, retry_count}))
+      })
     }
     return rows;
   } finally {
@@ -224,21 +236,24 @@ async function applyDeadLetter() {
         AND retry_count >= $1 
         AND dead = false
 
-      RETURNING events_staging.event_id
+      RETURNING events_staging.event_id, events_staging.error, events_staging.received_at
       `,
       [MAX_RETRIES],
     );
     if (res.rowCount > 0) {
-    logger.error({
-      service: 'worker',
-      component: 'dead_letter',
-      msg: 'events_marked_dead',
-      work: 'state_transistion',
-      from_state: 'failed',
-      to_state: 'dead',
-      dead_count: res.rowCount,
-        dead_events: res.rows.map((evt)=> evt.event_id)
-    })
+      logger.error({
+        service: 'worker',
+        component: 'dead_letter',
+        msg: 'events_marked_dead',
+        work: 'state_transistion',
+        from_state: 'failed',
+        to_state: 'dead',
+        worker_id: process.pid,
+        dead_count: res.rowCount,
+        dead_events: res.rows.map(
+          ({event_id, received_at, error})=> 
+            ({event_id, received_at,lastError: error}))
+      })
     }
     eventsDeadTotal.inc(res.rowCount)
   } finally {
