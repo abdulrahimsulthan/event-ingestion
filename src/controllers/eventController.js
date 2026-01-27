@@ -1,7 +1,8 @@
 const { deductInflight } = require("../middleware/rateLimiter");
-const { ingestRequestsTotal, ingestRequestsRejectedTotal, ingestRequestDuration } = require("../observability/metrics");
 const stageEvents = require("../services/stageEvents");
 const { ingestRequestsTotal, ingestRequestsRejectedTotal, ingestRequestDuration, ingestRequestsAcceptedTotal } = require("../observability/metrics");
+const logger = require("../observability/logger");
+
 
 const ingest = async (req, res) => {
   const start = Date.now()
@@ -14,6 +15,13 @@ const ingest = async (req, res) => {
     size += chunk.length;
     if (size > MAX_SIZE) {
       ingestRequestsRejectedTotal.inc()
+      logger.warn({
+        service: 'ingestion-api',
+        component: 'ingest',
+        msg: 'rejected_payload',
+        size_bytes: size,
+        error_code: 'exceed_payload_size'
+      })
       return req.destroy();
     } else {
       chunks.push(chunk);
@@ -28,23 +36,51 @@ const ingest = async (req, res) => {
       const { id, name, occurred_at } = event;
       if (!id || !name || !occurred_at) {
         ingestRequestsRejectedTotal.inc()
-        return res.status(400).json({ error: "Invalid payload." });
+        logger.warn({
+          service: 'ingestion-api',
+          component: 'ingest',
+          msg: 'rejected_payload',
+          event_id: id,
+          size_bytes: size,
+          error_code: 'missing_props',
+        })
+        return res.status(400).json({ error: 'missing required props' });
       }
       const ok = await stageEvents([event])
 
       if (!ok) {
         ingestRequestsRejectedTotal.inc()
+        logger.error({
+          service: 'ingestion-api',
+          component: 'ingest',
+          msg: 'service_unavailable',
+          event_id: id,
+          size_bytes: size,
+          error_code: 'staging_db_failure',
+        })
         return res.status(503).json({
           error: 'service unavailable.'
         })
       }
 
       ingestRequestsAcceptedTotal.inc()
-      
+      logger.info({
+        service: 'ingestion-api',
+        component: 'ingest',
+        msg: 'event_accepted',
+        event_id: id,
+        size_bytes: size,
+      })
       res.status(202).json({message: 'event accepted'})
     } catch (error) {
       ingestRequestsRejectedTotal.inc()
-      console.log("ingest error:", error);
+      logger.warn({
+        service: 'ingestion-api',
+        component: 'ingest',
+        msg: 'rejected_payload',
+        error_code: 'invalid_json',
+        size_bytes: size
+      })
       return res.status(400).json({ error: "Invalid JSON." });
     } finally {
       ingestRequestDuration.observe(Date.now() - start)
@@ -52,11 +88,7 @@ const ingest = async (req, res) => {
     }
   });
 
-  req.on('error', (error) => {
-    console.log('request error: ', error)
-    deductInflight()
-  })
-
+  req.on('error', deductInflight)
   req.on('close', deductInflight)
 }
 

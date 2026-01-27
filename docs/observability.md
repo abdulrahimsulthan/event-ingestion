@@ -92,9 +92,25 @@ Logs must be:
 
 ---  
 ### Logs Taxonomy
-- Boundary Logs (ingest)
-  - `INFO`: events accepted
-  - `WARN`: rejected payload
+- Ingest Logs (ingest)
+  - `INFO`: event_accepted
+    - `{event_id, size_bytes}`
+  - `WARN`: rejected_payload
+    ```
+    { 
+        event_id, 
+        size_bytes, 
+        error_code: "invalid_json | missing_props | exceed_payload_size"
+    }
+    ```
+  - `ERROR`: service_unavailable
+    ```
+    {
+        event_id, 
+        size_bytes, 
+        error_code: "staging_db_failure"
+    }
+    ```
 - State transistions
   - `INFO`: pending -> processing
   - `INFO`: processing -> processed
