@@ -13,6 +13,15 @@ const pool = new Pool({
   // connectionTimeoutMillis: 2000
 });
 
+pool.on("error", (err) => {
+  logger.error({
+    service: 'worker',
+    component: 'db',
+    msg: 'pg_pool_error',
+    error: err.message,
+  });
+});
+
 const errorLevels = {
   'ECONNREFUSED': 'error',
   'ENOTFOUND': 'error',

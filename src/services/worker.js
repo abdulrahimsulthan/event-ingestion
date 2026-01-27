@@ -360,3 +360,21 @@ loop().catch((err) => {
   }
   process.exit(1);
 });
+
+process.on("uncaughtException", (err) => {
+  logger.fatal({
+    service: 'worker',
+    msg: 'uncaught_exception',
+    error: err.message,
+  });
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  logger.fatal({
+    service: 'worker',
+    msg: 'unhandled_promise_rejection',
+    error: String(reason),
+  });
+  process.exit(1);
+});

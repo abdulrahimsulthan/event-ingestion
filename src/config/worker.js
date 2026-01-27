@@ -7,18 +7,22 @@ const registerWorker = () => {
   console.log("worker count ", WORKER_COUNT);
   const workerPath = path.resolve(__dirname, "../services/worker.js");
 
-  for (let i = 0; i < WORKER_COUNT; i++) {
+  for (let i = 1; i <= WORKER_COUNT; i++) {
     const worker = new Worker(workerPath, {
       env: {
         ...process.env,
         WORKER_ID: String(i),
-        METRICS_PORT: String(9101 + i),
+        METRICS_PORT: String(9100 + i),
       }});
 
     worker.on("message", (msg) => {
       if (msg.type === "error") {
-        console.error("Worker error:", msg.error);
+        console.error("Worker error:", msg);
       }
+    });
+
+    worker.on("error", (err) => {
+      console.error("Worker thread error:", err);
     });
 
     worker.on("exit", (code) => {

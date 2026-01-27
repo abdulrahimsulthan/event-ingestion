@@ -28,3 +28,21 @@ app.listen(PORT, () => {
     metrics_on: ` :${PORT}/metrics`
   });
 });
+
+process.on("uncaughtException", (err) => {
+  logger.fatal({
+    service: 'ingest-api',
+    msg: 'uncaught_exception',
+    error: err.message,
+  });
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  logger.fatal({
+    service: 'ingest-api',
+    msg: 'unhandled_promise_rejection',
+    error: String(reason),
+  });
+  process.exit(1);
+});
