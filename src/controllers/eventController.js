@@ -1,6 +1,6 @@
 const { deductInflight } = require("../middleware/rateLimiter");
 const stageEvents = require("../services/stageEvents");
-const { ingestRequestsTotal, ingestRequestsRejectedTotal, ingestRequestDuration, ingestRequestsAcceptedTotal } = require("../observability/metrics");
+const { ingestRequestsTotal, ingestRequestsRejectedTotal, ingestRequestDuration, ingestRequestsAcceptedTotal, ingestBytesTotal } = require("../observability/metrics");
 const logger = require("../observability/logger");
 
 
@@ -83,6 +83,7 @@ const ingest = async (req, res) => {
       })
       return res.status(400).json({ error: "Invalid JSON." });
     } finally {
+      ingestBytesTotal.inc(size)
       ingestRequestDuration.observe(Date.now() - start)
       deductInflight();
     }
