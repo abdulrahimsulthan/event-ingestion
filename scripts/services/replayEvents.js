@@ -1,13 +1,8 @@
 require("dotenv").config();
-const { Pool } = require("pg");
+const { eventRetriesTotal } = require("../../src/observability/metrics");
+const logger = require("../../src/observability/logger");
+const { pool, checkDBError } = require("../../src/config/db");
 
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: process.env.DB_PORT || 5432,
-});
 
 async function replay(from, to) {
   if (!from) {
@@ -16,10 +11,8 @@ async function replay(from, to) {
 
   const toDate = to || new Date().toISOString();
 
-  const client = await pool.connect();
-
   try {
-    const result = await client.query(
+    const result = await pool.query(
       `
       INSERT INTO events_staging (event_id, name, occurred_at, properties, received_at)
       SELECT
@@ -31,20 +24,36 @@ async function replay(from, to) {
       FROM events
       WHERE occurred_at >= $1
         AND occurred_at <= $2
+      
+      RETURNING events_staging.event_id
       `,
       [from, toDate]
     );
 
-    console.log(`Replayed ${result.rowCount} events`);
-  } finally {
-    client.release();
-    await pool.end();
+    const replayedEvents = result.rows.map(({event_id})=>event_id)
+    eventRetriesTotal.inc(result.rowCount)
+    logger.info({
+      component: 'replay',
+      msg: 'events_replayed',
+      from,
+      to: toDate,
+      replay_count: result.rowCount,
+      replay_events: replayedEvents
+    })
+    return true
+  } catch (error) {
+    if (checkDBError(error, {service: 'replay-endpoint', component: 'replay'})){}
+    else {
+      logger.fatal({
+        service: 'replay-endpoint',
+        component: 'replay',
+        msg: 'unknown_error',
+        error_code: error.code,
+        error: error.message,
+      })
+    }
+    return false
   }
 }
 
-const [, , from, to] = process.argv;
-
-replay(from, to).catch(err => {
-  console.error(err.message);
-  process.exit(1);
-});
+module.exports = replay

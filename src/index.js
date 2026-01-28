@@ -5,6 +5,7 @@ const ingest = require("./controllers/eventController");
 const registerWorker = require("./config/worker");
 const { client } = require("./observability/metrics");
 const logger = require("./observability/logger");
+const replay = require("../scripts/services/replayEvents");
 
 const app = express();
 if (process.env.WORKERS_ENABLED === "true") {
@@ -17,6 +18,11 @@ app.get("/metrics", async (_req, res) => {
 });
 
 app.post("/ingest", trackInflight, ingest);
+app.post("/replay-events", express.json(),async (req, res) => {
+  const {from, to = null} = req.body
+  replay(from, to)
+  res.status(202).json({message: 'events_replay_scheduled'})
+})
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
