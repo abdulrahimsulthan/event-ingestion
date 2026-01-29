@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "serve": "nodemon src/index.js",
-    "serve-with-worker": "WORKERS_ENABLED=true nodemon src/index.js",
+    "serve": "nodemon src/index.js >> logs/app.log 2>&1",
+    "serve-with-worker": "WORKERS_ENABLED=true nodemon src/index.js >> logs/app.log 2>&1",
     "migrate": "node scripts/migrate.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
