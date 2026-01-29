@@ -2,6 +2,7 @@ const { Worker } = require("worker_threads");
 const os = require("os");
 const path = require("path");
 const logger = require("../observability/logger");
+const { activeWorkers } = require("../observability/metrics");
 
 const registerWorker = () => {
   const WORKER_COUNT = Math.max(1, os.cpus().length - 1);
@@ -30,6 +31,7 @@ const registerWorker = () => {
     });
 
     worker.on("exit", (code) => {
+      activeWorkers.remove({ worker_id: worker_id });
       logger.info({
         service: 'worker',
         component: 'worker',

@@ -1,7 +1,7 @@
 const http = require('http')
 const { pool, checkDBError } = require("../config/db");
 const { parentPort } = require("worker_threads");
-const { eventsProcessedTotal, eventsFailedTotal, eventsDeadTotal, eventRetriesTotal, client } = require("../observability/metrics");
+const { eventsProcessedTotal, eventsFailedTotal, eventsDeadTotal, eventRetriesTotal, client, activeWorkers } = require("../observability/metrics");
 const logger = require('../observability/logger');
 
 const METRICS_PORT = process.env.METRICS_PORT;
@@ -355,6 +355,10 @@ if(METRICS_PORT) {
 }
 
 loop()
+
+setInterval(() => {
+  activeWorkers.set({ worker_id: WORKER_ID }, 1);
+}, 5000);
 
 process.on("uncaughtException", (err) => {
   logger.fatal({
