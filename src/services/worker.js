@@ -1,7 +1,7 @@
 const http = require('http')
 const { pool, checkDBError } = require("../config/db");
 const { parentPort } = require("worker_threads");
-const { eventsProcessedTotal, eventsFailedTotal, eventsDeadTotal, eventRetriesTotal, client, activeWorkers } = require("../observability/metrics");
+const { eventsProcessedTotal, eventsFailedTotal, eventsDeadTotal, eventRetriesTotal, client, activeWorkers, dbQueryLatencySeconds } = require("../observability/metrics");
 const logger = require('../observability/logger');
 
 const METRICS_PORT = process.env.METRICS_PORT;
@@ -24,102 +24,115 @@ function computeBackoffMS(retry_count) {
 
 // Recover events from stucked in processing status, and make it as failed events
 async function recoverStuckProcessing() {
-  const res = await pool.query(
-    `
-    UPDATE events_staging
-    SET
-      status = 'failed',
-      retry_count = retry_count + 1,
-      retry_at = now(),
-      error = 'processing time out',
-      processing_started_at = NULL
-    WHERE
-      status = 'processing' 
-      AND dead = false 
-      AND processing_started_at IS NOT NULL 
-      AND processing_started_at < now() - ($1 || ' milliseconds')::interval
+  const endTimer = dbQueryLatencySeconds.startTimer({query: 'recover_stuck_event'})
+  try {
+    const res = await pool.query(
+      `
+      UPDATE events_staging
+      SET
+        status = 'failed',
+        retry_count = retry_count + 1,
+        retry_at = now(),
+        error = 'processing time out',
+        processing_started_at = NULL
+      WHERE
+        status = 'processing' 
+        AND dead = false 
+        AND processing_started_at IS NOT NULL 
+        AND processing_started_at < now() - ($1 || ' milliseconds')::interval
 
-    RETURNING 
-      events_staging.event_id, 
-      events_staging.received_at, 
-      events_staging.retry_count
-    `,
-    [PROCESSING_TIMEOUT_MS],
-  );
-  if (res.rowCount > USUAL_LIMIT) {
-    logger.warn({
-      service: 'wroker',
-      component: 'recovery',
-      msg: 'unusual_volume_of_recovered_processing_events',
-      work: 'state_transisition',
-      from_state: 'processing',
-      to_state: 'failed',
-      worker_id: WORKER_ID,
-      recovered_count: res.rowCount,
-      recovered_events: res.rows,
-    })
+      RETURNING 
+        events_staging.event_id, 
+        events_staging.received_at, 
+        events_staging.retry_count
+      `,
+      [PROCESSING_TIMEOUT_MS],
+    );
+    endTimer()
+    if (res.rowCount > USUAL_LIMIT) {
+      logger.warn({
+        service: 'wroker',
+        component: 'recovery',
+        msg: 'unusual_volume_of_recovered_processing_events',
+        work: 'state_transisition',
+        from_state: 'processing',
+        to_state: 'failed',
+        worker_id: WORKER_ID,
+        recovered_count: res.rowCount,
+        recovered_events: res.rows,
+      })
+    }
+    else if (res.rowCount > 0) {
+      logger.info({
+        service: 'wroker',
+        component: 'recovery',
+        msg: 'recovered_processing_events',
+        work: 'state_transisition',
+        from_state: 'processing',
+        to_state: 'failed',
+        worker_id: WORKER_ID,
+        recovered_count: res.rowCount,
+        recovered_events: res.rows,
+      })
+    }
   }
-  else if (res.rowCount > 0) {
-    logger.info({
-      service: 'wroker',
-      component: 'recovery',
-      msg: 'recovered_processing_events',
-      work: 'state_transisition',
-      from_state: 'processing',
-      to_state: 'failed',
-      worker_id: WORKER_ID,
-      recovered_count: res.rowCount,
-      recovered_events: res.rows,
-    })
+  finally{
+    endTimer()
   }
 }
 
 // Requeue the eligible failed events.
 async function retryFailed() {
-  const res = await pool.query(
-    `
-    UPDATE events_staging
-    SET
-      status = 'pending'
-    WHERE
-      status = 'failed' 
-      AND dead = false 
-      AND retry_at <= now()
+  const endTimer = dbQueryLatencySeconds.startTimer({query: 'retry_failed'})
+  try {
+    const res = await pool.query(
+      `
+      UPDATE events_staging
+      SET
+        status = 'pending'
+      WHERE
+        status = 'failed' 
+        AND dead = false 
+        AND retry_at <= now()
 
-    RETURNING 
-      events_staging.event_id, 
-      events_staging.received_at, 
-      events_staging.retry_count,
-      events_staging.error
-    `,
-  );
-  if (res.rowCount > USUAL_LIMIT) {
-    logger.warn({
-      service: 'worker',
-      component: 'retry',
-      msg: 'unusual_volume_of_retry_failed_events',
-      work: 'state_transistion',
-      from_state: 'failed',
-      to_state: 'pending',
-      worker_id: WORKER_ID,
-      retry_events_count: res.rowCount,
-      retry_events: res.rows,
-    })
+      RETURNING 
+        events_staging.event_id, 
+        events_staging.received_at, 
+        events_staging.retry_count,
+        events_staging.error
+      `,
+    );
+    endTimer()
+    if (res.rowCount > USUAL_LIMIT) {
+      logger.warn({
+        service: 'worker',
+        component: 'retry',
+        msg: 'unusual_volume_of_retry_failed_events',
+        work: 'state_transistion',
+        from_state: 'failed',
+        to_state: 'pending',
+        worker_id: WORKER_ID,
+        retry_events_count: res.rowCount,
+        retry_events: res.rows,
+      })
+    }
+    else if (res.rowCount > 0) {
+      logger.info({
+        service: 'worker',
+        component: 'retry',
+        msg: 'retry_failed_events',
+        work: 'state_transistion',
+        from_state: 'failed',
+        to_state: 'pending',
+        worker_id: WORKER_ID,
+        retry_events_count: res.rowCount,
+        retry_events: res.rows,
+      })
+    }
+    eventRetriesTotal.inc(res.rowCount)
+  } finally {
+    endTimer()
   }
-  else if (res.rowCount > 0) {
-    logger.info({
-      service: 'worker',
-      component: 'retry',
-      msg: 'retry_failed_events',
-      work: 'state_transistion',
-      from_state: 'failed',
-      to_state: 'pending',
-      worker_id: WORKER_ID,
-      retry_events_count: res.rowCount,
-      retry_events: res.rows,
-    })
-  }
-  eventRetriesTotal.inc(res.rowCount)
 }
 
 async function promoteOnce({
@@ -132,6 +145,7 @@ async function promoteOnce({
   retry_count,
 }) {
   const client = await pool.connect();
+  const endTimer = dbQueryLatencySeconds.startTimer({query: 'event_promotion'})
 
   try {
     await client.query("BEGIN");
@@ -196,12 +210,14 @@ async function promoteOnce({
     })
     eventsFailedTotal.inc()
   } finally {
+    endTimer()
     client.release();
   }
 }
 
 async function promoteBatch() {
   const client = await pool.connect();
+  const endTimer = dbQueryLatencySeconds.startTimer({query: 'claimed_events'})
 
   // Claim batch of eligible pending events and move to processing status
   try {
@@ -231,6 +247,7 @@ async function promoteBatch() {
     `,
       [BATCH_SIZE],
     );
+    endTimer()
 
     if( rowCount > 0 ){
       logger.info({
@@ -249,6 +266,7 @@ async function promoteBatch() {
     }
     return rows;
   } finally {
+    endTimer();
     client.release();
   }
 }
@@ -256,6 +274,7 @@ async function promoteBatch() {
 // Add dead letter to unrecoverable events
 async function applyDeadLetter() {
   const client = await pool.connect();
+  const endTimer = dbQueryLatencySeconds.startTimer({query: 'apply_dead_letter'})
   try {
     const res = await client.query(
       `
@@ -273,6 +292,7 @@ async function applyDeadLetter() {
       `,
       [MAX_RETRIES],
     );
+    endTimer()
     if (res.rowCount > USUAL_LIMIT) {
       logger.fatal({
         service: 'worker',
@@ -301,6 +321,7 @@ async function applyDeadLetter() {
     }
     eventsDeadTotal.inc(res.rowCount)
   } finally {
+    endTimer()
     client.release();
   }
 }
