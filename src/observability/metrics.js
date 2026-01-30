@@ -145,6 +145,16 @@ async function updateQueueMetrics () {
 setInterval(updateQueueMetrics, 5000);
 
 
+/* =======================
+  DB latency track wrapper
+======================= */
+
+const dbQueryLatencySeconds = new client.Histogram({
+  name: 'db_query_latency_seconds',
+  help: 'Database query latency in seconds',
+  labelNames: ['query'],
+  buckets: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5]
+})
 
 /* =======================
    Exports
@@ -162,4 +172,5 @@ module.exports = {
   eventRetriesTotal,
   eventsDeadTotal,
   activeWorkers,
+  dbQueryLatencySeconds,
 };
