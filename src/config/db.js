@@ -29,11 +29,12 @@ const errorLevels = {
   'PROTOCOL_CONNECTION_LOST': 'warn',
 };
 const dbErrorCodes = Object.keys(errorLevels)
-const abstractDBErrors = (errorCode, data) => {
+const abstractDBErrors = (error, data) => {
 
-  logger[errorLevels[errorCode]]({
+  logger[errorLevels[error.code]]({
     msg: 'db_error',
-    error_code: errorCode,
+    error_code: error.code,
+    error: error.message,
     ...data,
   });
   return true;
@@ -41,7 +42,7 @@ const abstractDBErrors = (errorCode, data) => {
 
 const checkDBError = (error, data = {}) => {
   if(dbErrorCodes.find((errorCode) => errorCode == error.code)) {
-    return abstractDBErrors(error.code, data)
+    return abstractDBErrors(error, data)
   }
 
   return false
