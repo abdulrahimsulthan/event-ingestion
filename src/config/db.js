@@ -27,6 +27,7 @@ const errorLevels = {
   'ENOTFOUND': 'error',
   'ETIMEDOUT': 'warn',
   'PROTOCOL_CONNECTION_LOST': 'warn',
+  42601: 'error' // generic Syntax Error
 };
 const dbErrorCodes = Object.keys(errorLevels)
 const abstractDBErrors = (error, data) => {
