@@ -5,7 +5,7 @@ const logger = require("../observability/logger");
 
 
 const ingest = async (req, res) => {
-  const start = Date.now()
+  const endTimer = ingestRequestDuration.startTimer()
   const MAX_SIZE = 1024 * 1024 * 25; //25MB
   const chunks = [];
   let size = 0;
@@ -84,7 +84,7 @@ const ingest = async (req, res) => {
       return res.status(400).json({ error: "Invalid JSON." });
     } finally {
       ingestBytesTotal.inc(size)
-      ingestRequestDuration.observe(Date.now() - start)
+      endTimer()
       deductInflight();
     }
   });
