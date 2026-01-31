@@ -1,10 +1,12 @@
 const { pool, checkDBError } = require("../config/db");
 const logger = require("../observability/logger");
+const { dbQueryLatencySeconds } = require("../observability/metrics");
 
 const stageEvents = async (events) => {
   // single event
   if (events.length == 1) {
     const [{ id, name, occurred_at, properties }] = events;
+    const endTimer = dbQueryLatencySeconds.startTimer({query: 'events_staging'})
     try {
       await pool.query(
         `
@@ -13,16 +15,28 @@ const stageEvents = async (events) => {
         `,
         [id, name, occurred_at, properties]
       );
+      endTimer()
       return true;
     } catch (error) {
-      if (checkDBError(error, {
+      if (!checkDBError(error, {
+        service: 'ingestion-api',
+        component: 'ingest-staging',
+        event_id: id,
+      })){
+        logger.fatal({
           service: 'ingestion-api',
           component: 'ingest-staging',
           event_id: id,
-        })){}
+          msg: 'unknown_error',
+          error_code: error.code,
+          error: error.message,
+        })
       }
-      return false;
+    } finally {
+      endTimer()
     }
+      return false;
+    } 
   }
 
   // // TODO: batched events
