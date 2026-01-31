@@ -109,9 +109,10 @@ async function updateQueueMetrics () {
       SELECT
         COUNT(*) FILTER (WHERE status = 'pending')    AS pending,
         COUNT(*) FILTER (WHERE status = 'processing') AS processing,
-        EXTRACT(EPOCH FROM (
-          now() - MIN(received_at)
-        )) FILTER (WHERE status IN ('pending','processing')) AS lag,
+        EXTRACT( EPOCH FROM (
+          now() - MIN(received_at) 
+          FILTER (WHERE status IN ('pending','processing'))
+        )) AS lag,
         COUNT(*) FILTER (
           WHERE status = 'processing'
             AND processing_started_at < now() - INTERVAL '5 minutes'
@@ -135,6 +136,7 @@ async function updateQueueMetrics () {
         component: 'updateQueueMetrics',
         msg: 'unknown prom-client error',
         error_code: error.code,
+        error: error.message,
       });
     }
   } finally {
