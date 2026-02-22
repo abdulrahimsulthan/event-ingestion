@@ -6,11 +6,14 @@ const registerWorker = require("./config/worker");
 const { client } = require("./observability/metrics");
 const logger = require("./observability/logger");
 const replay = require("../scripts/services/replayEvents");
+const {default: init} = require("./kafka/producer");
+
 
 const app = express();
 if (process.env.WORKERS_ENABLED === "true") {
   registerWorker();
 }
+init()
 
 app.get("/metrics", async (_req, res) => {
   res.set("Content-Type", client.register.contentType);
@@ -25,7 +28,7 @@ app.post("/replay-events", express.json(),async (req, res) => {
 })
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, '127.0.0.1', () => {
   logger.info({
     service: 'ingestion-api',
     component: 'ingest',
